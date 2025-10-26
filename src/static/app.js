@@ -16,6 +16,36 @@ document.addEventListener("DOMContentLoaded", () => {
     return String(text).replace(/[&<>"']/g, (m) => map[m]);
   }
 
+  // Handle unregistering a participant
+  async function unregisterParticipant(activityName, email) {
+    try {
+      const response = await fetch(
+        `/activities/${encodeURIComponent(activityName)}/unregister?email=${encodeURIComponent(email)}`,
+        {
+          method: "POST"
+        }
+      );
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.detail || "Failed to unregister participant");
+      }
+
+      // Refresh the activities list to show updated participants
+      await fetchActivities();
+      
+      messageDiv.textContent = "Successfully unregistered participant";
+      messageDiv.className = "success";
+      messageDiv.classList.remove("hidden");
+      setTimeout(() => messageDiv.classList.add("hidden"), 5000);
+    } catch (error) {
+      messageDiv.textContent = error.message;
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      console.error("Error unregistering:", error);
+    }
+  }
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
@@ -39,7 +69,14 @@ document.addEventListener("DOMContentLoaded", () => {
         let participantsHtml = '';
         if (Array.isArray(details.participants) && details.participants.length > 0) {
           const items = details.participants
-            .map((p) => `<li class=\"participant-item\">${escapeHtml(p)}</li>`)
+            .map((p) => `
+              <li class="participant-item">
+                <span class="participant-email">${escapeHtml(p)}</span>
+                <button class="delete-participant" 
+                  data-activity="${escapeHtml(name)}" 
+                  data-email="${escapeHtml(p)}"
+                  title="Unregister participant">×</button>
+              </li>`)
             .join('');
           participantsHtml = `
             <div class="participants-section">
@@ -66,6 +103,16 @@ document.addEventListener("DOMContentLoaded", () => {
         option.value = name;
         option.textContent = name;
         activitySelect.appendChild(option);
+      });
+
+      // Add click handlers for delete buttons
+      document.querySelectorAll('.delete-participant').forEach(button => {
+        button.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const activity = e.target.dataset.activity;
+          const email = e.target.dataset.email;
+          await unregisterParticipant(activity, email);
+        });
       });
     } catch (error) {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
@@ -94,6 +141,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Refresh activities list to show the new registration
+        await fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
